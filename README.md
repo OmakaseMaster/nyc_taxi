@@ -18,6 +18,10 @@ Cleaned data from taxi_preprocessing.ipynb
 
 The ipynb file is the well documented process for data wrangling. It contains data import and zone-seperation and zone-selection part and helps rewrite a cleaned data set for next-step analysis.
 
+## taxi_simulation.ipynb
+
+The ipynb file is the well documented process for simulation towards trip count and travel time.
+
 # Helper programs
 
 ## ZoneSeperation.py
