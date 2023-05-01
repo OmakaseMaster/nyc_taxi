@@ -12,7 +12,16 @@ import multiprocessing as mp
 from multiprocessing import Pool, Array
 from ctypes import c_double, c_int, c_long
 from functools import partial
-def time_simulation(data, random_uniform, ij, number_of_zone=40):
+
+# class Taxi_simulation
+#     def __init__(self, data, num_cores, number_of_zone=40):
+#         self.data = data
+#         self.num_cores = num_cores
+#         self.number_of_zone = number_of_zone
+
+# global variable:
+data = pd.read_csv("nyc_data_cleaned.csv")
+def time_simulation(random_uniform, ij, number_of_zone=40):
     with time_arr.get_lock():  # every process is accessing the same slice, so get_lock()
         simulated_time = np.frombuffer(time_arr.get_obj())
         simulated_time = simulated_time.reshape((number_of_zone, number_of_zone, 60*24))
@@ -42,7 +51,7 @@ def time_simulation(data, random_uniform, ij, number_of_zone=40):
                 # so that each trips start from each minute is simulated in this hour
                 samples = interp_func(random_uniform[i,j,:])
                 simulated_time[i][j][t * 60: (t + 1) * 60] = samples
-def trip_simulation(data, ij, number_of_zone=40):
+def trip_simulation(ij, number_of_zone=40):
     with trip_arr.get_lock():  # every process is accessing the same slice, so get_lock()
         simulated_trip = np.frombuffer(trip_arr.get_obj())  
         simulated_trip = simulated_trip.reshape((number_of_zone, number_of_zone, 60*24))
@@ -56,6 +65,30 @@ def trip_simulation(data, ij, number_of_zone=40):
             travel_count = len(df_sub)
             samples = np.random.multinomial(travel_count, np.ones(60) / 60)
             simulated_trip[i][j][t * 60: (t + 1) * 60] = samples
+def linear_model():
+    global data
+    fare = np.array(data["total_amount"])
+    distance = np.array(data["trip_distance"]).reshape((-1, 1))
+    travel_time = np.array(data["trip_time_in_secs"]).reshape((-1, 1))
+    x = np.concatenate((distance, travel_time), axis=1)
+    # create a linear regression model and fit it to the data
+    fare_model = LinearRegression().fit(x, fare)
+    # calculate R-squared
+    r_squared = fare_model.score(x, fare)
+    print("The R squared of the model is: ", r_squared)
+    beta0 = fare_model.intercept_
+    beta1 = fare_model.coef_[0]
+    beta2 = fare_model.coef_[1]
+    return beta0, beta1, beta2
+def dist_simulation(number_of_zone=40):
+    global data
+    grouped_df = data.groupby(["pickup_zone", "dropoff_zone"]) # group data by zone
+    simulated_distance = grouped_df["trip_distance"].apply(lambda x: random.gauss(np.mean(x), np.std(x)))
+    # > calcualte the simulated_distance within each group
+    simulated_distance = np.array(simulated_distance).reshape((number_of_zone,number_of_zone))
+    return simulated_distance # turn to np.array
+def fare_simulation(distance, time, beta0, beta1, beta2):
+    return beta0 + beta1 * distance + beta2 * time
 
 def init(shared_arr_):    # to define the global variable in each multi-process
     global time_arr
@@ -65,7 +98,6 @@ def init2(shared_arr_2):   # same as above but for another pool
     trip_arr = shared_arr_2
 if __name__ == "__main__":
     ## read inputs:
-    data = pd.read_csv("nyc_data_cleaned.csv")
     number_of_zone = len(data["pickup_zone"].unique())
     num_cores = mp.cpu_count()
     ## Time simulation:
@@ -74,38 +106,29 @@ if __name__ == "__main__":
     ijs = list(product(range(number_of_zone), range(number_of_zone))) # all possible pairs of i,j
     random_uniform = np.random.uniform(0, 1, size=(number_of_zone, number_of_zone, 60))
     # > pre-compute all uniform distribution at once
-    time_simulation_partial = partial(time_simulation, data, random_uniform) # fix 1st,2nd arg
+    time_simulation_partial = partial(time_simulation, random_uniform) # fix 1st,2nd arg
     with Pool(processes=num_cores, initializer=init, initargs=(time_arr,)) as pool:
         pool.map(time_simulation_partial, ijs)
     simulated_time = np.frombuffer(time_arr.get_obj())
     simulated_time = simulated_time.reshape((number_of_zone, number_of_zone, 60*24))
     end_time = time.time()
-    print(f"Time spent for time simulation: {end_time-start_time}")
+    print(f"Time took for time simulation: {end_time-start_time}")
 
     ## Trip simulation
     # multiprocessing didn't improve efficiency...
-    trip_arr = np.zeros((number_of_zone, number_of_zone, 60*24), dtype='i')
-    for i in range(number_of_zone):
-        for j in range(number_of_zone):
-            for t in range(24):
-                # df_sub includes only the rides from zone i to zone j during t:t+1 hour
-                df_sub = data[(data["pickup_zone"] == i)
-                              & (data["dropoff_zone"] == j)
-                              & (data["pickup_hour"] == t)]
-                # get all the travel time for rides
-                travel_count = len(df_sub)
-                samples = np.random.multinomial(travel_count, np.ones(60) / 60)
-                trip_arr[i][j][t * 60: (t + 1) * 60] = list(samples)
-    # trip_arr = Array(c_long, number_of_zone * number_of_zone * 60*24)
+    trip_arr = Array(c_long, number_of_zone * number_of_zone * 60*24)
     # trip_simulation_partial = partial(trip_simulation, data)
-    # with Pool(processes=num_cores, initializer=init2, initargs=(trip_arr,)) as pool:
-    #     pool.map(trip_simulation_partial, ijs)
-    # simulated_trip = np.frombuffer(trip_arr.get_obj())
-    # simulated_trip = simulated_trip.reshape((number_of_zone, number_of_zone, 60*24))
-    print(f"Time spent for trip simulation: {time.time()-end_time}")
-    
-
-
+    with Pool(processes=num_cores, initializer=init2, initargs=(trip_arr,)) as pool:
+        pool.map(trip_simulation, ijs)
+    simulated_trip = np.frombuffer(trip_arr.get_obj())
+    simulated_trip = simulated_trip.reshape((number_of_zone, number_of_zone, 60*24))
+    print(f"Time took for trip simulation: {time.time()-end_time}")
+    ## Ride fare simulation
+    beta0, beta1, beta2 = linear_model()
+    start_time = time.time()
+    simulated_distance = dist_simulation()
+    end_time = time.time()
+    print(f"Time took for distance simulation: {end_time-start_time}")
 
 
     
