@@ -15,18 +15,22 @@ def available_trip(i, k, simulated_trip):
     return ans 
 import datetime 
 import datetime 
-def driver_sim1(simulated_values,i_start,k_start = 8*60,k_end = 22*60, verbose=20):
+def driver_sim1(simulated_values,i_start,k_start = 8*60,k_end = 22*60, verbose=0, seed=0):
     """
+    simulated_values: simulation setup
     i_start: initial working zone
     k_start, k_end: start/end time in minutes
-    verbose: # of iteration per report 
+    verbose: no. of iteration per report 
+    return: dict, zone frequency, total # of trips & amount of fares
     """
+    random.seed(seed)  # set specific seed for reproduction
     simulated_time = simulated_values["simulated_time"]
     simulated_distance = simulated_values["simulated_distance"]
     simulated_trip = simulated_values["simulated_trip"]
     simulated_fare = simulated_values["simulated_fare"]
     wait_time = simulated_values["wait_time"]
-    print(f'{str(datetime.timedelta(minutes=int(k_start)))} : Driver 1 start working at zone {i_start}')
+    if verbose != 0:
+        print(f'{str(datetime.timedelta(minutes=int(k_start)))} : Driver start working at zone {i_start}')
     # initialization
     cur_i = i_start
     cur_k = k_start
@@ -35,6 +39,7 @@ def driver_sim1(simulated_values,i_start,k_start = 8*60,k_end = 22*60, verbose=2
     rest1 = 0
     rest2 = 0
     cnt = 0 # cnt iteration
+    zone_freq = np.zeros(40) # buffer for saving 40 zones frequency
     while cur_k <= k_end:
         cnt += 1
         # trip quiry
@@ -44,6 +49,7 @@ def driver_sim1(simulated_values,i_start,k_start = 8*60,k_end = 22*60, verbose=2
             wt = wait_time[cur_i][cur_k]
             cur_k += wt
         j = random.choice(available_trip(cur_i, cur_k, simulated_trip))
+        zone_freq[j] += 1   # +1 for the destination zone
         sim_dis = simulated_distance[cur_i, j]
         # trip ongoing
         cur_k += math.ceil(simulated_time[cur_i][j][cur_k]/60)
@@ -61,7 +67,6 @@ def driver_sim1(simulated_values,i_start,k_start = 8*60,k_end = 22*60, verbose=2
             if verbose != 0:
                 print(f'{str(datetime.timedelta(minutes=int(cur_k)))} : Rest for 30 min ')
             rest1 = 1
-        
         if cur_k > 16*60 + 30 and rest2 == 0:
             cur_k += 30 
             if verbose != 0:
@@ -69,18 +74,19 @@ def driver_sim1(simulated_values,i_start,k_start = 8*60,k_end = 22*60, verbose=2
             rest2 = 1
         cur_case += 1
     sep = '-'
-    print(f'From {str(datetime.timedelta(minutes=int(k_start)))} to {str(datetime.timedelta(minutes=int(cur_k)))} : {cur_case} trips finished ($ {cur_fare}!!!)\n{sep*30}')
+    if verbose != 0:
+        print(f'From {str(datetime.timedelta(minutes=int(k_start)))} to {str(datetime.timedelta(minutes=int(cur_k)))} : {cur_case} trips finished ($ {cur_fare}!!!)\n{sep*30}')
+    output = {'zone_freq':zone_freq, "num_of_trip":cur_case, "total_fare":cur_fare}
+    return output
 def main():
     # inputs:
-    file = open("simulated_values.pkl", 'rb')
-    simulated_values = pickle.load(file)
-    file.close()
+    simulated_values = load_py("simulated_values.pkl")
     if sys.argv[1] == "one":
         # strategy 1:
         driver_sim1(simulated_values, 22, verbose=1)
     elif sys.argv[1] == "all_zones_once":
         for i_start in range(40):
-            driver_sim1(simulated_values, i_start, verbose=20)
+            driver_sim1(simulated_values, i_start, verbose=0)
 
 
 
