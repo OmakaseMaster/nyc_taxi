@@ -242,18 +242,11 @@ def driver_sim3(simulated_values,i_start,k_start = 8*60,k_end = 22*60, verbose=0
     return output
 
 def main():
-    # inputs:
-    simulated_values = load_py("simulated_values.pkl")
-    if sys.argv[1] == "one":
-        # strategy 1:
-        driver_sim1(simulated_values, 22, verbose=1)
-    elif sys.argv[1] == "two":
-        # strategy 2:
-        driver_sim2(simulated_values, 22, verbose=1)
-    elif sys.argv[1] == "three":
-        # strategy 3:
-        driver_sim3(simulated_values, 22, verbose=1)
-    elif sys.argv[1] == "all_zones_once":
+        simulated_values = load_py("simulated_values.pkl")
+        zone_cnt = np.zeros(40)
+        trip_cnt = np.zeros(3)
+        fare_cnt = np.zeros(3)
+        
         for i_start in range(40):
             
             [trip1,fare1] = [driver_sim1(simulated_values, i_start, verbose=0, seed = i_start)[key] for key in ["num_of_trip","total_fare"]]
@@ -267,7 +260,53 @@ def main():
             print(f'Total trip: {trip2} and Total fare :{fare2}')
             print("Strategy 3:")
             print(f'Total trip: {trip3} and Total fare :{fare3}')
+            
+            trip_cnt[0] += trip1/40
+            trip_cnt[1] += trip2/40
+            trip_cnt[2] += trip3/40
+            fare_cnt[0]+= fare1/40
+            fare_cnt[1] += fare2/40
+            fare_cnt[2] += fare3/40
+            
+        print("------------------------------------------------------------")
+        print(f"Strategy 1: Avg trip = {trip_cnt[0]} and Avg fare = {fare_cnt[0]}")
+        print(f"Strategy 2: Avg trip = {trip_cnt[1]} and Avg fare = {fare_cnt[1]}")
+        print(f"Strategy 3: Avg trip = {trip_cnt[2]} and Avg fare = {fare_cnt[2]}")
+        
+# def main():
+#     # inputs:
+#     simulated_values = load_py("simulated_values.pkl")
+#     T = 1
+    
+#     zone_cnt = [[np.zeros(40)]*3]*T
+#     trip_cnt = [np.zeros(40)]*3
+#     fare_cnt = [np.zeros(40)]*3
+    
+#     for iter in range(T):
+#         for i_start in range(40):
+#             seed = iter*120 + i_start*40  
+#             [zone1,trip1,fare1] = [v for v in driver_sim1(simulated_values, i_start, verbose=0, seed = seed).values()]
+#             [zone2,trip2,fare2] = [v for v in driver_sim2(simulated_values, i_start, verbose=0, seed = seed + 1).values()]
+#             [zone3,trip3,fare3] = [v for v in driver_sim3(simulated_values, i_start, verbose=0, seed = seed + 2).values()]
+#             zone_cnt[iter] = [zone1,zone2,zone3]
+#             trip_cnt[0][i_start] += trip1//T
+#             trip_cnt[1][i_start] += trip2//T
+#             trip_cnt[2][i_start] += trip3//T
+#             fare_cnt[0][i_start] += fare1//T
+#             fare_cnt[1][i_start] += fare2//T
+#             fare_cnt[2][i_start] += fare3//T
+            
+#         print(f'iter {iter} finished and recorded !!')
+    
+#     print(f"Simulation time = {T}")
+#     print("Strategy 1:")
+#     print(f'Avg trip: {np.mean(trip_cnt[0])} and Avg fare :{np.mean(fare_cnt[0])}')
+#     print("Strategy 2:")
+#     print(f'Avg trip: {np.mean(trip_cnt[1])} and Avg fare :{np.mean(fare_cnt[1])}')
+#     print("Strategy 3:")
+#     print(f'Avg trip: {np.mean(trip_cnt[2])} and Avg fare :{np.mean(fare_cnt[2])}') 
 
+    
 
 if __name__ == "__main__":
     main()
